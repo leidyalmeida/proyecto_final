@@ -8,7 +8,14 @@ if (!isset($_SESSION['user_rol']) || $_SESSION['user_rol'] !== 'ADMIN') {
 
 require_once '../config/conexion.php';
 
-// Obtener conteos para las tarjetas del dashboard
+// Inicializar variables por defecto
+$total_categorias = 0;
+$total_productos = 0;
+$total_usuarios = 0;
+$ingresos_totales = 0;
+$total_pedidos = 0;
+$ultimos_pedidos = [];
+
 try {
     // Total de categorías
     $stmt_cat = $conexion->query("SELECT COUNT(*) FROM categorias");
@@ -22,10 +29,18 @@ try {
     $stmt_user = $conexion->query("SELECT COUNT(*) FROM usuarios");
     $total_usuarios = $stmt_user->fetchColumn();
 
+    // Métricas de ventas
+    $stmt_ventas = $conexion->query("SELECT SUM(monto_total) AS ingresos_totales, COUNT(*) AS total_pedidos FROM pedidos");
+    $res_ventas = $stmt_ventas->fetch(PDO::FETCH_ASSOC);
+    $ingresos_totales = $res_ventas['ingresos_totales'] ?? 0;
+    $total_pedidos = $res_ventas['total_pedidos'] ?? 0;
+
+    // Listado de pedidos (Cambiado a un SELECT simple de la tabla pedidos para evitar problemas con el INNER/LEFT JOIN de usuarios)
+  $stmt_pedidos = $conexion->query("SELECT id, usuario_id, codigo_pedido, fecha_pedido AS fecha, monto_total AS total, estado_pedido AS estado FROM pedidos ORDER BY id DESC");
+    $ultimos_pedidos = $stmt_pedidos->fetchAll(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
-    $total_categorias = 0;
-    $total_productos = 0;
-    $total_usuarios = 0;
+    $error_bd = $e->getMessage();
 }
 ?>
 <!DOCTYPE html>
@@ -68,9 +83,19 @@ try {
             <p class="text-muted">Panel de control general del sistema de comercio electrónico.</p>
         </div>
 
-        <div class="row g-4">
-            <!-- Tarjeta Categorías -->
-            <div class="col-md-4">
+        <!-- Tarjetas de métricas -->
+        <div class="row g-4 mb-5">
+            <div class="col-md-3">
+                <div class="card shadow-sm border-0 h-100 border-start border-success border-4">
+                    <div class="card-body">
+                        <h5 class="card-title text-success fw-bold"><i class="fas fa-dollar-sign"></i> Ventas Totales</h5>
+                        <h2 class="display-6 fw-bold my-3">$<?= number_format($ingresos_totales, 2); ?></h2>
+                        <p class="text-muted small mb-0"><?= $total_pedidos; ?> pedidos en el sistema</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
                 <div class="card shadow-sm border-0 h-100 border-start border-primary border-4">
                     <div class="card-body">
                         <h5 class="card-title text-primary fw-bold"><i class="fas fa-tags"></i> Categorías</h5>
@@ -81,8 +106,7 @@ try {
                 </div>
             </div>
 
-            <!-- Tarjeta Productos -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card shadow-sm border-0 h-100 border-start border-success border-4">
                     <div class="card-body">
                         <h5 class="card-title text-success fw-bold"><i class="fas fa-box"></i> Productos</h5>
@@ -93,8 +117,7 @@ try {
                 </div>
             </div>
 
-            <!-- Tarjeta Usuarios (Interactiva) -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card shadow-sm border-0 h-100 border-start border-info border-4">
                     <div class="card-body">
                         <h5 class="card-title text-info fw-bold"><i class="fas fa-users"></i> Usuarios</h5>
@@ -105,6 +128,63 @@ try {
                 </div>
             </div>
         </div>
+
+        <!-- Sección: Control de Estados de Pedidos -->
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold text-secondary"><i class="fas fa-shopping-bag"></i> Control de Estados de Pedidos</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th># ID</th>
+                                <th>Cliente ID</th>
+                                <th>Código</th>
+                                <th>Total</th>
+                                <th>Fecha</th>
+                                <th>Estado</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($ultimos_pedidos)): ?>
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">No hay pedidos registrados todavía.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($ultimos_pedidos as $pedido): ?>
+                                    <tr>
+                                        <td>#<?= $pedido['id']; ?></td>
+                                        <td><span class="badge bg-light text-dark">Usuario #<?= $pedido['usuario_id']; ?></span></td>
+                                        <td><?= htmlspecialchars($pedido['codigo_pedido'] ?? 'N/A'); ?></td>
+                                        <td class="fw-bold text-success">$<?= number_format($pedido['total'], 2); ?></td>
+                                        <td><?= $pedido['fecha']; ?></td>
+                                        <td>
+                                            <span class="badge bg-secondary"><?= htmlspecialchars($pedido['estado']); ?></span>
+                                        </td>
+                                        <td class="text-center">
+                                            <form action="actualizar_estado.php" method="POST" class="d-inline-flex gap-2">
+                                                <input type="hidden" name="pedido_id" value="<?= $pedido['id']; ?>">
+                                                <select name="nuevo_estado" class="form-select form-select-sm" style="width: 130px;">
+                                                    <option value="PENDIENTE" <?= $pedido['estado'] == 'PENDIENTE' ? 'selected' : ''; ?>>PENDIENTE</option>
+                                                    <option value="PROCESO" <?= $pedido['estado'] == 'PROCESO' ? 'selected' : ''; ?>>PROCESO</option>
+                                                    <option value="COMPLETADO" <?= $pedido['estado'] == 'COMPLETADO' ? 'selected' : ''; ?>>COMPLETADO</option>
+                                                    <option value="CANCELADO" <?= $pedido['estado'] == 'CANCELADO' ? 'selected' : ''; ?>>CANCELADO</option>
+                                                </select>
+                                                <button type="submit" class="btn btn-sm btn-outline-primary">Actualizar</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Pie de página -->
@@ -117,3 +197,4 @@ try {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

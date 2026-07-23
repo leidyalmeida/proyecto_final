@@ -180,7 +180,7 @@ try {
         // Lógica AJAX unificada para agregar al carrito (funciona en tarjeta y modal)
         $(document).on('click', '.btn-add-cart', function(e) {
             e.preventDefault();
-            let producto_id = $(this).data('id');
+            let producto_id = $(this).attr('data-id');
 
             if (!producto_id) {
                 console.error("ID de producto no encontrado.");
