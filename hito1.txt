@@ -1,0 +1,4 @@
+﻿Hito 1 - Requerimientos:
+- Base de datos con tablas de roles, usuarios y productos.
+- Login y Registro de usuarios con contraseñas encriptadas.
+- Panel Admin con CRUD de Productos y Categorías.
