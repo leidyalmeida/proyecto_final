@@ -74,6 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_compra'])) {
     // 3. Generar PDF de la factura con FPDF
     require(__DIR__ . '/fpdf/fpdf.php');
     
+    // Capturamos la fecha y hora exacta del servidor en una variable
+    date_default_timezone_set('America/Guayaquil'); // Establece la zona horaria correcta para Ecuador
+    $fecha_hora_actual = date('Y-m-d H:i:s');
+    
+    
     $pdf = new FPDF();
     $pdf->AddPage();
     
@@ -96,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_compra'])) {
     $pdf->Cell(90, 5, 'No. Pedido: ' . $codigo_pedido, 0, 1);
     
     $pdf->Cell(100, 5, 'Correo: ' . $correo_cliente, 0, 0);
-    $pdf->Cell(90, 5, 'Fecha: ' . date('Y-m-d H:i:s'), 0, 1);
+    $pdf->Cell(90, 5, 'Fecha y Hora: ' . $fecha_hora_actual, 0, 1);
 
     $pdf->Cell(100, 5, '', 0, 0);
     $pdf->Cell(90, 5, 'Metodo de Pago: ' . $metodo_pago, 0, 1);

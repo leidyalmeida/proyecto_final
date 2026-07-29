@@ -120,12 +120,29 @@ try {
                             </div>
                             <h3 id="modal-descripcion" class="fw-bold text-dark mb-3"></h3>
                             <h4 id="modal-precio" class="text-success fw-bold mb-3"></h4>
-                            <p class="text-muted mb-4"><i class="fas fa-boxes"></i> Stock disponible: <span id="modal-stock" class="fw-semibold text-dark"></span> unidades</p>
+                            <p class="text-muted mb-3"><i class="fas fa-boxes"></i> Stock disponible: <span id="modal-stock" class="fw-semibold text-dark"></span> unidades</p>
                             
-                            <!-- Botón de añadir al carrito dentro del modal -->
-                            <button type="button" class="btn btn-primary w-100 btn-add-cart py-2" id="modal-btn-add" data-id="">
-                                <i class="fas fa-cart-plus me-2"></i> Añadir al Carrito
-                            </button>
+                            <!-- Selector de Tallas (Solo se mostrará si la categoría es de ropa) -->
+                            <div class="mb-3" id="seccion-tallas" style="display: none;">
+                                <label for="modal-talla" class="form-label fw-bold text-secondary small"><i class="fas fa-tshirt"></i> Seleccionar Talla:</label>
+                                <select id="modal-talla" class="form-select fw-bold">
+                                    <option value="XS">XS (Extra Small)</option>
+                                    <option value="S">S (Small)</option>
+                                    <option value="M" selected>M (Medium)</option>
+                                    <option value="L">L (Large)</option>
+                                    <option value="XXL">XXL (Extra Extra Large)</option>
+                                </select>
+                            </div>
+
+                            <!-- Selector de cantidad y Botón de añadir al carrito dentro del modal -->
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 110px;">
+                                    <input type="number" id="modal-cantidad" class="form-control text-center fw-bold" value="1" min="1">
+                                </div>
+                                <button type="button" class="btn btn-primary flex-grow-1 py-2 btn-add-cart" id="modal-btn-add" data-id="">
+                                    <i class="fas fa-cart-plus me-2"></i> Añadir al Carrito
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -135,6 +152,11 @@ try {
             </div>
         </div>
     </div>
+
+    <!-- Botón Flotante Fijo del Carrito -->
+    <a href="carrito.php" class="btn btn-primary rounded-circle shadow-lg d-flex align-items-center justify-content-center" style="position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; z-index: 1000; font-size: 24px;" title="Ver Carrito de Compras">
+        <i class="fas fa-shopping-cart text-white"></i>
+    </a>
 
     <!-- Pie de página -->
     <footer class="bg-dark text-white text-center py-4 mt-5">
@@ -172,6 +194,21 @@ try {
                 productoModal.querySelector('#modal-precio').textContent = '$' + precio;
                 productoModal.querySelector('#modal-stock').textContent = stock;
                 
+                // Mostrar u ocultar el selector de tallas según la categoría
+                const seccionTallas = productoModal.querySelector('#seccion-tallas');
+                const categoriaLower = categoria.toLowerCase();
+                
+                if (categoriaLower.includes('ropa') || categoriaLower.includes('moda') || categoriaLower.includes('vestido') || categoriaLower.includes('caballeros') || categoriaLower.includes('damas')) {
+                    seccionTallas.style.display = 'block';
+                } else {
+                    seccionTallas.style.display = 'none';
+                }
+                
+                // Configurar el input de cantidad con el stock máximo y valor inicial en 1
+                const inputCantidad = productoModal.querySelector('#modal-cantidad');
+                inputCantidad.value = 1;
+                inputCantidad.setAttribute('max', stock);
+
                 // Asignar el ID al botón de compra dentro del modal
                 productoModal.querySelector('#modal-btn-add').setAttribute('data-id', id);
             });
@@ -187,14 +224,30 @@ try {
                 return;
             }
 
+            // Capturar la cantidad y la talla si viene del modal
+            let cantidad = 1;
+            let talla = 'M'; // Talla por defecto si se añade desde la tarjeta principal
+            
+            if ($(this).attr('id') === 'modal-btn-add') {
+                cantidad = $('#modal-cantidad').val();
+                talla = $('#modal-talla').val();
+            }
+
             $.ajax({
                 url: 'ajax/agregar_carrito.php',
                 type: 'POST',
-                data: { id: producto_id },
+                data: { id: producto_id, cantidad: cantidad, talla: talla },
                 success: function(response) {
                     try {
                         let res = typeof response === 'object' ? response : JSON.parse(response);
                         if (res.status === 'success') {
+                            // Cerrar el modal automáticamente al agregar con éxito
+                            var myModalEl = document.getElementById('productoModal');
+                            var modal = bootstrap.Modal.getInstance(myModalEl);
+                            if (modal) {
+                                modal.hide();
+                            }
+
                             Swal.fire({
                                 icon: 'success',
                                 title: '¡Agregado!',

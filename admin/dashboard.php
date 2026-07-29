@@ -35,8 +35,8 @@ try {
     $ingresos_totales = $res_ventas['ingresos_totales'] ?? 0;
     $total_pedidos = $res_ventas['total_pedidos'] ?? 0;
 
-    // Listado de pedidos (Cambiado a un SELECT simple de la tabla pedidos para evitar problemas con el INNER/LEFT JOIN de usuarios)
-  $stmt_pedidos = $conexion->query("SELECT id, usuario_id, codigo_pedido, fecha_pedido AS fecha, monto_total AS total, estado_pedido AS estado FROM pedidos ORDER BY id DESC");
+    // Listado de pedidos
+    $stmt_pedidos = $conexion->query("SELECT id, usuario_id, codigo_pedido, fecha_pedido AS fecha, monto_total AS total, estado_pedido AS estado FROM pedidos ORDER BY id DESC");
     $ultimos_pedidos = $stmt_pedidos->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
@@ -128,11 +128,18 @@ try {
                 </div>
             </div>
         </div>
-
-        <!-- Sección: Control de Estados de Pedidos -->
+<!-- Sección: Control de Estados de Pedidos -->
         <div class="card shadow-sm border-0">
-            <div class="card-header bg-white py-3">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0 fw-bold text-secondary"><i class="fas fa-shopping-bag"></i> Control de Estados de Pedidos</h5>
+                <div>
+                    <a href="../reportes_pdf/exportar_pdf_pedidos.php" target="_blank" class="btn btn-danger btn-sm me-1">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </a>
+                    <a href="../reportes_xls/exportar_excel_pedidos.php" class="btn btn-success btn-sm">
+    <i class="fas fa-file-excel"></i> Excel
+</a>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -162,7 +169,25 @@ try {
                                         <td class="fw-bold text-success">$<?= number_format($pedido['total'], 2); ?></td>
                                         <td><?= $pedido['fecha']; ?></td>
                                         <td>
-                                            <span class="badge bg-secondary"><?= htmlspecialchars($pedido['estado']); ?></span>
+                                            <?php
+                                                // Asignación de colores dinámicos según el estado registrado en base de datos
+                                                $clase_badge = 'bg-secondary';
+                                                switch ($pedido['estado']) {
+                                                    case 'COMPLETADO':
+                                                        $clase_badge = 'bg-success'; // Verde
+                                                        break;
+                                                    case 'PENDIENTE':
+                                                        $clase_badge = 'bg-warning text-dark'; // Amarillo
+                                                        break;
+                                                    case 'PROCESO':
+                                                        $clase_badge = 'bg-primary'; // Azul
+                                                        break;
+                                                    case 'CANCELADO':
+                                                        $clase_badge = 'bg-danger'; // Rojo
+                                                        break;
+                                                }
+                                            ?>
+                                            <span class="badge <?= $clase_badge; ?>"><?= htmlspecialchars($pedido['estado']); ?></span>
                                         </td>
                                         <td class="text-center">
                                             <form action="actualizar_estado.php" method="POST" class="d-inline-flex gap-2">

@@ -2,20 +2,52 @@
 session_start();
 require_once 'config/conexion.php';
 
-// Manejar acciones del carrito (eliminar producto o vaciar carrito)
-if (isset($_GET['accion'])) {
-    if ($_GET['accion'] == 'eliminar' && isset($_GET['id'])) {
-        $id = $_GET['id'];
-        unset($_SESSION['carrito'][$id]);
-        header("Location: carrito.php");
-        exit;
+// Inicializar el carrito si no existe
+if (!isset($_SESSION['carrito'])) {
+    $_SESSION['carrito'] = [];
+}
+
+// Procesar acciones de actualización o eliminación
+if (isset($_POST['accion'])) {
+    $key = $_POST['key'] ?? '';
+
+    if ($_POST['accion'] === 'actualizar') {
+        $nueva_cantidad = intval($_POST['cantidad']);
+        $nueva_talla = isset($_POST['talla']) ? trim($_POST['talla']) : '';
+
+        if (isset($_SESSION['carrito'][$key])) {
+            if ($nueva_cantidad > 0) {
+                // Actualizamos directamente la cantidad y la talla sin alterar la llave existente
+                $_SESSION['carrito'][$key]['cantidad'] = $nueva_cantidad;
+                if ($nueva_talla !== '') {
+                    $_SESSION['carrito'][$key]['talla'] = $nueva_talla;
+                }
+                echo json_encode(['status' => 'success']);
+            } else {
+                unset($_SESSION['carrito'][$key]);
+                echo json_encode(['status' => 'success']);
+            }
+        }
+        exit();
     }
-    if ($_GET['accion'] == 'vaciar') {
-        unset($_SESSION['carrito']);
-        header("Location: carrito.php");
-        exit;
+
+    if ($_POST['accion'] === 'eliminar') {
+        if (isset($_SESSION['carrito'][$key])) {
+            unset($_SESSION['carrito'][$key]);
+            echo json_encode(['status' => 'success']);
+        }
+        exit();
+    }
+
+    if ($_POST['accion'] === 'vaciar') {
+        $_SESSION['carrito'] = [];
+        echo json_encode(['status' => 'success']);
+        exit();
     }
 }
+
+// Calcular subtotales y totales para la vista
+$subtotal_general = 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -25,6 +57,7 @@ if (isset($_GET['accion'])) {
     <title>MiTienda - Carrito de Compras</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 </head>
 <body class="bg-light">
 
@@ -33,109 +66,116 @@ if (isset($_GET['accion'])) {
         <div class="container">
             <a class="navbar-brand fw-bold" href="index.php"><i class="fas fa-store"></i> MiTienda</a>
             <div class="d-flex align-items-center">
-                <a href="index.php" class="text-white text-decoration-none me-3"><i class="fas fa-arrow-left"></i> Seguir Comprando</a>
+                <a href="index.php" class="text-white text-decoration-none me-3">Inicio</a>
+                <a href="carrito.php" class="text-white text-decoration-none me-3"><i class="fas fa-shopping-cart"></i> Carrito</a>
+                <?php if (isset($_SESSION['user_nombre'])): ?>
+                    <span class="text-white me-3"><i class="fas fa-user"></i> <?= htmlspecialchars($_SESSION['user_nombre']); ?></span>
+                    <a href="logout.php" class="btn btn-outline-light btn-sm"><i class="fas fa-sign-out-alt"></i> Salir</a>
+                <?php else: ?>
+                    <a href="login.php" class="btn btn-primary btn-sm me-2"><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</a>
+                <?php endif; ?>
             </div>
         </div>
     </nav>
 
+    <!-- Contenido del Carrito -->
     <div class="container my-5">
-        <h2 class="mb-4 fw-bold text-secondary"><i class="fas fa-shopping-cart"></i> Carrito de Compras</h2>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold text-secondary"><i class="fas fa-shopping-cart"></i> Carrito de Compras</h2>
+            <a href="index.php" class="btn btn-outline-dark btn-sm fw-bold"><i class="fas fa-arrow-left"></i> Seguir Comprando</a>
+        </div>
 
         <?php if (empty($_SESSION['carrito'])): ?>
-            <div class="alert alert-info text-center py-4" role="alert">
-                <i class="fas fa-info-circle fa-2x mb-3 d-block"></i>
-                <h4>Tu carrito está vacío</h4>
-                <p class="text-muted">No has agregado ningún producto todavía.</p>
-                <a href="index.php" class="btn btn-primary mt-2"><i class="fas fa-box-open"></i> Ver Catálogo</a>
+            <div class="alert alert-info text-center py-5 shadow-sm rounded-4 bg-white" role="alert">
+                <i class="fas fa-shopping-cart fa-3x mb-3 text-muted"></i>
+                <h4 class="fw-bold">Tu carrito está vacío</h4>
+                <p class="text-muted">Explora nuestro catálogo y añade productos para empezar.</p>
+                <a href="index.php" class="btn btn-primary mt-2 rounded-pill px-4">Ver Productos</a>
             </div>
         <?php else: ?>
             <div class="row">
-                <!-- Listado de productos en el carrito -->
+                <!-- Tabla de Productos en el Carrito -->
                 <div class="col-lg-8">
-                    <div class="card shadow-sm border-0 p-4 mb-4">
+                    <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
                         <div class="table-responsive">
-                            <table class="table align-middle">
-                                <thead class="table-light">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-dark">
                                     <tr>
-                                        <th>Imagen</th>
-                                        <th>Producto</th>
-                                        <th>Precio</th>
-                                        <th>Cantidad</th>
-                                        <th>Subtotal</th>
-                                        <th>Acción</th>
+                                        <th class="py-3 ps-3">Imagen</th>
+                                        <th class="py-3">Producto / Opciones</th>
+                                        <th class="py-3 text-center">Precio</th>
+                                        <th class="py-3 text-center" style="width: 140px;">Cantidad</th>
+                                        <th class="py-3 text-center">Subtotal</th>
+                                        <th class="py-3 text-center">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php 
-                                    $total_general = 0;
-                                    foreach ($_SESSION['carrito'] as $item): 
+                                    <?php foreach ($_SESSION['carrito'] as $key => $item): 
                                         $subtotal = $item['precio'] * $item['cantidad'];
-                                        $total_general += $subtotal;
+                                        $subtotal_general += $subtotal;
                                     ?>
-                                    <tr>
-                                        <td>
-                                            <img src="assets/img/<?= htmlspecialchars($item['imagen']); ?>" width="50" height="50" style="object-fit:cover; border-radius: 5px;" onerror="this.src='assets/img/audifonos.jpg'">
-                                        </td>
-                                        <td class="fw-bold"><?= htmlspecialchars($item['descripcion']); ?></td>
-                                        <td>$<?= number_format($item['precio'], 2); ?></td>
-                                        <td>
-                                            <span class="badge bg-secondary px-3 py-2 fs-6"><?= $item['cantidad']; ?></span>
-                                        </td>
-                                        <td class="fw-bold text-success">$<?= number_format($subtotal, 2); ?></td>
-                                        <td>
-                                            <a href="carrito.php?accion=eliminar&id=<?= $item['id']; ?>" class="btn btn-danger btn-sm" title="Eliminar producto">
-                                                <i class="fas fa-trash-alt"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
+                                        <tr data-key="<?= htmlspecialchars($key); ?>">
+                                            <td class="ps-3 py-3" style="width: 90px;">
+                                                <img src="assets/img/<?= htmlspecialchars($item['imagen']); ?>" alt="" class="img-fluid rounded-3 border" style="width: 70px; height: 70px; object-fit: cover;" onerror="this.src='assets/img/default.png'">
+                                            </td>
+                                            <td>
+                                                <h6 class="fw-bold mb-1 text-dark"><?= htmlspecialchars($item['descripcion']); ?></h6>
+                                                <small class="text-muted d-block">Código: <?= htmlspecialchars($item['codigo']); ?></small>
+                                                
+                                                <!-- Selector de tallas: Solo aparece si el producto tiene talla -->
+                                                <?php if (!empty($item['talla'])): ?>
+                                                    <div class="mt-2 d-flex align-items-center gap-1">
+                                                        <span class="small fw-semibold text-secondary">Talla:</span>
+                                                        <select class="form-select form-select-sm select-talla py-0 px-2" style="width: 80px; font-size: 12px;">
+                                                            <?php foreach (['XS', 'S', 'M', 'L', 'XXL'] as $t): ?>
+                                                                <option value="<?= $t; ?>" <?= $item['talla'] === $t ? 'selected' : ''; ?>><?= $t; ?></option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-center fw-semibold text-success">$<?= number_format($item['precio'], 2); ?></td>
+                                            <td class="text-center">
+                                                <input type="number" class="form-control text-center input-cantidad fw-bold mx-auto" value="<?= $item['cantidad']; ?>" min="1" style="width: 75px;">
+                                            </td>
+                                            <td class="text-center fw-bold text-success">$<?= number_format($subtotal, 2); ?></td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-outline-danger btn-sm rounded-circle btn-eliminar" title="Eliminar producto">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
-                            <div>
-                                <a href="carrito.php?accion=vaciar" class="btn btn-outline-danger btn-sm">
-                                    <i class="fas fa-trash"></i> Vaciar Carrito
-                                </a>
-                                <a href="index.php" class="btn btn-outline-secondary btn-sm ms-1">
-                                    <i class="fas fa-plus"></i> Agregar más productos
-                                </a>
-                            </div>
-                            <div>
-                                <a href="exportar_productos.php" class="btn btn-success btn-sm">
-                                    <i class="fas fa-file-excel"></i> Descargar Inventario en Excel
-                                </a>
-                            </div>
+                        <div class="card-footer bg-light d-flex justify-content-between p-3">
+                            <button type="button" class="btn btn-outline-danger btn-sm" id="btn-vaciar"><i class="fas fa-trash"></i> Vaciar Carrito</button>
+                            <a href="index.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-plus"></i> Añadir más productos</a>
                         </div>
                     </div>
                 </div>
 
-                <!-- Resumen de compra -->
+                <!-- Resumen de la Orden -->
                 <div class="col-lg-4">
-                    <div class="card shadow-sm border-0 p-4">
-                        <h4 class="mb-3 fw-bold">Resumen de la Orden</h4>
-                        <hr>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-muted">Subtotal:</span>
-                            <span class="fw-bold">$<?= number_format($total_general, 2); ?></span>
+                    <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                        <h4 class="fw-bold mb-4 text-dark">Resumen de la Orden</h4>
+                        <div class="d-flex justify-content-between mb-3 text-muted">
+                            <span>Subtotal:</span>
+                            <span class="fw-semibold text-dark">$<?= number_format($subtotal_general, 2); ?></span>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-muted">Envío:</span>
-                            <span class="text-success fw-bold">Gratis</span>
+                        <div class="d-flex justify-content-between mb-3 text-muted">
+                            <span>Envío:</span>
+                            <span class="text-success fw-semibold">Gratis</span>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between mb-4">
-                            <span class="fw-bold fs-5">Total a Pagar:</span>
-                            <span class="fw-bold fs-4 text-success">$<?= number_format($total_general, 2); ?></span>
+                            <span class="fs-5 fw-bold text-dark">Total a Pagar:</span>
+                            <span class="fs-4 fw-bold text-success">$<?= number_format($subtotal_general, 2); ?></span>
                         </div>
-                        
-                        <!-- Formulario para enviar el total real por POST hacia checkout.php -->
-                        <form action="checkout.php" method="POST">
-                            <input type="hidden" name="total_general" value="<?= $total_general; ?>">
-                            <button type="submit" class="btn btn-success w-100 py-2 fw-bold">
-                                <i class="fas fa-check-circle"></i> Proceder al Pago
-                            </button>
-                        </form>
+                        <a href="checkout.php" class="btn btn-success w-100 py-3 fw-bold rounded-pill shadow-sm">
+                            <i class="fas fa-check-circle me-2"></i> Proceder al Pago
+                        </a>
                     </div>
                 </div>
             </div>
@@ -149,6 +189,107 @@ if (isset($_GET['accion'])) {
         </div>
     </footer>
 
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+    $(document).ready(function() {
+        // Cambiar cantidad en tiempo real
+        $(document).on('change', '.input-cantidad', function() {
+            let row = $(this).closest('tr');
+            let key = row.attr('data-key');
+            let cantidad = $(this).val();
+            
+            let selectTalla = row.find('.select-talla');
+            let talla = selectTalla.length ? selectTalla.val() : '';
+
+            if (cantidad < 1) {
+                $(this).val(1);
+                cantidad = 1;
+            }
+
+            $.ajax({
+                url: 'carrito.php',
+                type: 'POST',
+                data: { accion: 'actualizar', key: key, cantidad: cantidad, talla: talla },
+                success: function() {
+                    location.reload();
+                }
+            });
+        });
+
+        // Cambiar talla de ropa en tiempo real
+        $(document).on('change', '.select-talla', function() {
+            let row = $(this).closest('tr');
+            let key = row.attr('data-key');
+            let cantidad = row.find('.input-cantidad').val();
+            let talla = $(this).val();
+
+            $.ajax({
+                url: 'carrito.php',
+                type: 'POST',
+                data: { accion: 'actualizar', key: key, cantidad: cantidad, talla: talla },
+                success: function() {
+                    location.reload();
+                }
+            });
+        });
+
+        // Eliminar producto individual
+        $(document).on('click', '.btn-eliminar', function() {
+            let row = $(this).closest('tr');
+            let key = row.attr('data-key');
+
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "Se eliminará este producto del carrito",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: 'carrito.php',
+                        type: 'POST',
+                        data: { accion: 'eliminar', key: key },
+                        success: function() {
+                            location.reload();
+                        }
+                    });
+                }
+            });
+        });
+
+        // Vaciar carrito
+        $('#btn-vaciar').click(function() {
+            Swal.fire({
+                title: '¿Vaciar carrito?',
+                text: "Se eliminarán todos los productos agregados",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, vaciar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: 'carrito.php',
+                        type: 'POST',
+                        data: { accion: 'vaciar' },
+                        success: function() {
+                            location.reload();
+                        }
+                    });
+                }
+            });
+        });
+    });
+    </script>
 </body>
 </html>

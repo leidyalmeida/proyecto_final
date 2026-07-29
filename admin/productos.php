@@ -55,6 +55,8 @@ $productos = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
     <title>Gestionar Productos | Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- SweetAlert2 CSS & JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
@@ -113,36 +115,105 @@ $productos = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <!-- Listado de Productos -->
-        <div class="card shadow-sm p-4">
-            <h4 class="mb-3">Productos Registrados</h4>
-            <table class="table table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Imagen</th>
-                        <th>Código</th>
-                        <th>Descripción</th>
-                        <th>Categoría</th>
-                        <th>Precio</th>
-                        <th>Stock</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach($productos as $prod): ?>
-                    <tr>
-                        <td><img src="../assets/img/<?= htmlspecialchars($prod['imagen']) ?>" width="50" height="50" style="object-fit:cover;" onerror="this.src='https://via.placeholder.com/50?text=Error'"></td>
-                        <td><?= htmlspecialchars($prod['codigo']) ?></td>
-                        <td><?= htmlspecialchars($prod['descripcion']) ?></td>
-                        <td><?= htmlspecialchars($prod['categoria_nombre']) ?></td>
-                        <td>$<?= number_format($prod['precio'], 2) ?></td>
-                        <td><?= $prod['stock'] ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h4 class="mb-0 fw-bold text-secondary">Productos Registrados</h4>
+                <div class="d-flex gap-2">
+                    <a href="../reportes_pdf/exportar_pdf.php" target="_blank" class="btn btn-danger btn-sm">
+                        <i class="fas fa-file-pdf"></i> Exportar PDF
+                    </a>
+                    <a href="../reportes_xls/exportar_excel.php" target="_blank" class="btn btn-success btn-sm">
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <table class="table table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Imagen</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Categoría</th>
+                            <th>Precio</th>
+                            <th>Stock</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach($productos as $prod): ?>
+                        <tr>
+                            <td><img src="../assets/img/<?= htmlspecialchars($prod['imagen']) ?>" width="50" height="50" style="object-fit:cover;" onerror="this.src='https://via.placeholder.com/50?text=Error'"></td>
+                            <td><?= htmlspecialchars($prod['codigo']) ?></td>
+                            <td><?= htmlspecialchars($prod['descripcion']) ?></td>
+                            <td><?= htmlspecialchars($prod['categoria_nombre']) ?></td>
+                            <td>$<?= number_format($prod['precio'], 2) ?></td>
+                            <td><?= $prod['stock'] ?></td>
+                            <td>
+                                <a href="editar_producto.php?id=<?= $prod['id'] ?>" class="btn btn-sm btn-warning text-dark"><i class="fas fa-edit"></i> Editar</a>
+                                <!-- Botón de eliminar con confirmación moderna de SweetAlert -->
+                                <button type="button" class="btn btn-sm btn-danger" onclick="confirmarEliminacion(<?= $prod['id'] ?>)"><i class="fas fa-trash-alt"></i> Eliminar</button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
         <div class="mt-3">
             <a href="dashboard.php" class="btn btn-secondary">&larr; Volver al Dashboard</a>
         </div>
     </div>
+
+    <!-- Script para gestionar las alertas flotantes y de confirmación -->
+    <script>
+        // 1. Alerta flotante (Toast) cuando se edita o elimina correctamente
+        window.addEventListener('DOMContentLoaded', (event) => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('mensaje')) {
+                const tipo = urlParams.get('mensaje');
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+
+                if (tipo === 'editado') {
+                    Toast.fire({
+                        icon: 'success',
+                        title: '¡Producto editado correctamente!'
+                    });
+                } else if (tipo === 'eliminado') {
+                    Toast.fire({
+                        icon: 'success',
+                        title: 'El producto fue eliminado con éxito'
+                    });
+                }
+                // Limpiar la URL para evitar que la alerta se repita al refrescar
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
+
+        // 2. Ventana de confirmación previa antes de eliminar
+        function confirmarEliminacion(id) {
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "¡No podrás revertir esta acción!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Redirige al archivo encargado de procesar la eliminación
+                    window.location.href = 'eliminar_producto.php?id=' + id;
+                }
+            });
+        }
+    </script>
 </body>
 </html>
